@@ -5,20 +5,25 @@ This file provides the web UI for deployment on Streamlit Community Cloud.
 """
 
 import streamlit as st
-from langchain_config import llm_chain, get_summary
+from langchain_config import llm_chain, get_articles_and_summary
 
 
-def generate_summary(query: str) -> str:
-    """Fetch news and generate an LLM summary with graceful quota fallback."""
-    summaries = get_summary(query)
+def generate_summary_and_articles(query: str):
+    """
+    Fetch news articles and generate an LLM summary with graceful quota fallback.
+    Returns (summary_text, articles_list).
+    """
+    articles, summaries = get_articles_and_summary(query)
     try:
-        return llm_chain.invoke({"query": query, "summaries": summaries})
+        summary = llm_chain.invoke({"query": query, "summaries": summaries})
     except Exception as e:
         error_msg = str(e)
         if "429" in error_msg or "quota" in error_msg.lower() or "insufficient_quota" in error_msg:
             # Fallback: return raw combined news text if OpenAI quota is exceeded
-            return summaries[:3000] + ("..." if len(summaries) > 3000 else "")
-        raise
+            summary = summaries[:3000] + ("..." if len(summaries) > 3000 else "")
+        else:
+            raise
+    return summary, articles
 
 
 def main():
@@ -30,7 +35,8 @@ def main():
     st.title("Equity Research News Tool")
     st.write(
         "Enter an equity/stock/market query below. "
-        "The app will fetch recent news via NewsAPI and generate a concise AI summary."
+        "The app will fetch recent news via NewsAPI, generate a concise AI summary, "
+        "and show links to the underlying articles."
     )
 
     query = st.text_input(
@@ -49,13 +55,32 @@ def main():
 
         with st.spinner("Fetching news and generating summary..."):
             try:
-                result = generate_summary(query.strip())
+                summary, articles = generate_summary_and_articles(query.strip())
             except Exception as e:
                 st.error(f"Error while generating summary: {e}")
                 return
 
         st.subheader("Summary")
-        st.write(result)
+        st.write(summary)
+
+        if articles:
+            st.subheader("Source articles")
+            for article in articles:
+                title = article.get("title") or "Untitled article"
+                url = article.get("url")
+                source = (article.get("source") or {}).get("name") if isinstance(article.get("source"), dict) else None
+                published = article.get("publishedAt")
+
+                meta_parts = [p for p in [source, published] if p]
+                meta = " • ".join(meta_parts)
+
+                if url:
+                    st.markdown(f"- [{title}]({url})")
+                else:
+                    st.markdown(f"- {title}")
+
+                if meta:
+                    st.markdown(f"  \n  _{meta}_")
 
 
 if __name__ == "__main__":

@@ -48,9 +48,13 @@ def summarize_articles(articles):
             summaries.append(desc)
     return " ".join(summaries) if summaries else "No descriptions found."
 
-def get_summary(query):
+def get_articles_and_summary(query):
     articles = get_news_articles(query)
     combined_text = summarize_articles(articles)
+    return articles, combined_text
+
+def get_summary(query):
+    _, combined_text = get_articles_and_summary(query)
     return combined_text
 
 # ── Prompt & Chain (updated to handle summaries) ──────────────────────────────
