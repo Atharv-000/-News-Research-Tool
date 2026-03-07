@@ -1,53 +1,63 @@
 """
-Equity Research News Tool - CLI Interface
+Equity Research News Tool - Streamlit App
 Fetches news via NewsAPI and summarizes with LangChain/OpenAI.
-Add your own UI/UX (web, desktop, etc.) by importing from langchain_config.
+This file provides the web UI for deployment on Streamlit Community Cloud.
 """
-import argparse
-import sys
+
+import streamlit as st
 from langchain_config import llm_chain, get_summary
 
 
-def run_query(query: str) -> str:
-    """Fetch news and generate summary. Returns summary text or None on error."""
-    print("Fetching news articles...", file=sys.stderr)
+def generate_summary(query: str) -> str:
+    """Fetch news and generate an LLM summary with graceful quota fallback."""
     summaries = get_summary(query)
-    print("Generating AI summary...", file=sys.stderr)
     try:
         return llm_chain.invoke({"query": query, "summaries": summaries})
     except Exception as e:
         error_msg = str(e)
         if "429" in error_msg or "quota" in error_msg.lower() or "insufficient_quota" in error_msg:
-            print("OpenAI quota exceeded. Add billing at https://platform.openai.com/account/billing", file=sys.stderr)
+            # Fallback: return raw combined news text if OpenAI quota is exceeded
             return summaries[:3000] + ("..." if len(summaries) > 3000 else "")
         raise
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Equity Research News Tool - CLI")
-    parser.add_argument("query", nargs="?", help="Search query (e.g. 'Tesla stock'). Omit for interactive mode.")
-    args = parser.parse_args()
+    st.set_page_config(
+        page_title="Equity Research News Tool",
+        layout="wide",
+    )
 
-    if args.query:
-        print(run_query(args.query))
-        return
+    st.title("Equity Research News Tool")
+    st.write(
+        "Enter an equity/stock/market query below. "
+        "The app will fetch recent news via NewsAPI and generate a concise AI summary."
+    )
 
-    # Interactive mode
-    print("Equity Research News Tool")
-    print("Enter a query to get summarized news. Empty line or Ctrl+C to quit.\n")
-    while True:
-        try:
-            query = input("Query: ").strip()
-        except (KeyboardInterrupt, EOFError):
-            print("\nExiting.")
-            break
-        if not query:
-            break
-        result = run_query(query)
-        print("\n--- Summary ---\n")
-        print(result)
-        print("\n")
+    query = st.text_input(
+        "Query",
+        placeholder="e.g. Tesla stock, NIFTY 50, Federal Reserve, crude oil prices",
+    )
+
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        run = st.button("Summarize")
+
+    if run:
+        if not query.strip():
+            st.warning("Please enter a query before running the summary.")
+            return
+
+        with st.spinner("Fetching news and generating summary..."):
+            try:
+                result = generate_summary(query.strip())
+            except Exception as e:
+                st.error(f"Error while generating summary: {e}")
+                return
+
+        st.subheader("Summary")
+        st.write(result)
 
 
 if __name__ == "__main__":
     main()
+

@@ -4,3 +4,4 @@ langchain-core>=1.2.0
 newsapi-python>=0.2.7
 python-dotenv>=1.0.0
 flask>=3.0.0
+streamlit
